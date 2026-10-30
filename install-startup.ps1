@@ -1,4 +1,4 @@
-# Creates a Startup-folder shortcut that launches league_auto_mute.exe (minimised) at login.
+# Creates a Startup-folder shortcut that launches league_auto_mute.exe minimised to the tray at login.
 $ErrorActionPreference = "Stop"
 
 # Packaged zip: exe sits next to this script. Source checkout: exe is under target\release.
@@ -16,11 +16,11 @@ $lnk = Join-Path $startup "League Auto Mute.lnk"
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($lnk)
 $shortcut.TargetPath = $exe
+$shortcut.Arguments = "--minimized"
 $shortcut.WorkingDirectory = Split-Path $exe
-$shortcut.WindowStyle = 7   # minimised
-$shortcut.Description = "Auto-types /mute enemy once per League match"
+$shortcut.Description = "Auto-types /mute enemy or /mute all once per League match"
 $shortcut.Save()
 
 Write-Host "Installed: $lnk"
-Write-Host "It will start minimised at next login. Starting it now..."
-Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -WindowStyle Minimized
+Write-Host "It will start in the tray at next login. Starting it now..."
+Start-Process -FilePath $exe -ArgumentList "--minimized" -WorkingDirectory (Split-Path $exe)

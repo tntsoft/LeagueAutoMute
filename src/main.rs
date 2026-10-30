@@ -1,20 +1,22 @@
+#![windows_subsystem = "windows"]
+
+mod app;
 mod config;
 mod game;
+mod icon;
 mod input;
+mod ui;
+mod worker;
 
+use app::App;
 use config::Config;
-use game::LiveClient;
 use std::path::PathBuf;
-use std::thread::sleep;
-use std::time::Duration;
-
-fn log(msg: impl AsRef<str>) {
-    println!("[{}] {}", chrono::Local::now().format("%H:%M:%S"), msg.as_ref());
-}
+use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
 
 struct Args {
     config_path: PathBuf,
     dry_run: bool,
+    minimized: bool,
 }
 
 fn parse_args() -> Args {
@@ -25,144 +27,48 @@ fn parse_args() -> Args {
     let mut args = Args {
         config_path: exe_dir.join("config.toml"),
         dry_run: false,
+        minimized: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
             "--dry-run" | "-n" => args.dry_run = true,
+            "--minimized" | "-m" => args.minimized = true,
             "--config" | "-c" => {
                 if let Some(p) = it.next() {
                     args.config_path = PathBuf::from(p);
                 }
             }
-            "--help" | "-h" => {
-                println!(
-                    "league_auto_mute [--config <path>] [--dry-run]\n\n\
-                     Types the configured chat commands once per League of Legends match.\n\
-                     --config   path to config.toml (default: next to the exe)\n\
-                     --dry-run  detect games and log, but do not send any keystrokes"
-                );
-                std::process::exit(0);
-            }
-            other => eprintln!("ignoring unknown argument: {other}"),
+            _ => {}
         }
     }
     args
 }
 
-/// Open chat, type the command, send it.
-fn send_command(cmd: &str, cfg: &Config) -> Result<(), String> {
-    let key_delay = Duration::from_millis(cfg.key_delay_ms);
-    let open_delay = Duration::from_millis(cfg.chat_open_delay_ms);
-    input::press_enter()?;
-    sleep(open_delay);
-    input::type_text(cmd, key_delay)?;
-    sleep(open_delay);
-    input::press_enter()
+fn fatal(msg: &str) -> ! {
+    let text: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
+    let title: Vec<u16> = "League Auto Mute".encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR);
+    }
+    std::process::exit(1);
 }
 
 fn main() {
     let args = parse_args();
-    let cfg = match Config::load_or_create(&args.config_path) {
+    let config = match Config::load_or_create(&args.config_path) {
         Ok(c) => c,
-        Err(e) => {
-            eprintln!("config error: {e}");
-            std::process::exit(1);
-        }
+        Err(e) => fatal(&format!("Config error: {e}")),
     };
-    let client = match LiveClient::new() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("http client error: {e}");
-            std::process::exit(1);
-        }
-    };
+    let app = App::init(args.config_path, config, args.dry_run);
 
-    log(format!("config: {}", args.config_path.display()));
-    log(format!("commands: {:?}", cfg.commands));
-    if args.dry_run {
-        log("dry run: no keystrokes will be sent");
+    if let Err(e) = ui::init(args.minimized) {
+        fatal(&format!("UI error: {e}"));
     }
-    log("waiting for a League of Legends match...");
+    ui::log(format!("config: {}", app.config_path.display()));
 
-    let poll = Duration::from_millis(cfg.poll_interval_ms);
-    // True once commands were sent for the current match; reset when the game ends.
-    let mut done_this_game = false;
-    let mut in_game = false;
-    let mut waiting_for_focus_logged = false;
+    std::thread::spawn(move || worker::run(app));
 
-    loop {
-        let stats = match client.game_stats() {
-            Ok(s) => s,
-            Err(e) => {
-                log(format!("api error: {e}"));
-                sleep(poll);
-                continue;
-            }
-        };
-
-        let Some(stats) = stats else {
-            if in_game {
-                log("game ended");
-                in_game = false;
-                done_this_game = false;
-                waiting_for_focus_logged = false;
-            }
-            sleep(poll);
-            continue;
-        };
-
-        if !in_game {
-            in_game = true;
-            log(format!(
-                "game detected: mode={} map={} time={:.0}s",
-                stats.game_mode, stats.map_name, stats.game_time
-            ));
-        }
-
-        if done_this_game {
-            sleep(poll);
-            continue;
-        }
-
-        if stats.game_time < cfg.min_game_time_secs {
-            sleep(Duration::from_millis(500));
-            continue;
-        }
-
-        if cfg.require_foreground {
-            let fg = input::foreground_title();
-            if fg != cfg.window_title {
-                if !waiting_for_focus_logged {
-                    let hint = if input::window_exists(&cfg.window_title) {
-                        "game window is not focused"
-                    } else {
-                        "no window with the configured title found"
-                    };
-                    log(format!("{hint}; waiting (foreground: \"{fg}\")"));
-                    waiting_for_focus_logged = true;
-                }
-                sleep(Duration::from_millis(500));
-                continue;
-            }
-        }
-
-        // Game is running, past the minimum time, and focused: send the commands.
-        for (i, cmd) in cfg.commands.iter().enumerate() {
-            if args.dry_run {
-                log(format!("dry run: would type {cmd:?}"));
-                continue;
-            }
-            match send_command(cmd, &cfg) {
-                Ok(()) => log(format!("sent {cmd:?}")),
-                Err(e) => log(format!("failed to send {cmd:?}: {e}")),
-            }
-            if i + 1 < cfg.commands.len() {
-                sleep(Duration::from_millis(cfg.between_commands_ms));
-            }
-        }
-        done_this_game = true;
-        log("done for this match; waiting for it to end");
-        sleep(poll);
-    }
+    let code = ui::message_loop();
+    std::process::exit(code);
 }

@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "league_auto_mute"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "reqwest",

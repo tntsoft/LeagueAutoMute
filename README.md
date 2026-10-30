@@ -1,7 +1,7 @@
 # League Auto Mute
 
-A tiny Windows background tool that types `/mute enemy` into League of Legends chat
-once per match, automatically, so you never have to remember it.
+A tiny Windows tray app that types `/mute enemy` (or `/mute all`) into League of Legends
+chat once per match, automatically, so you never have to remember it.
 
 ## How it works
 
@@ -14,68 +14,72 @@ once per match, automatically, so you never have to remember it.
 
 Works for every mode, ARAM Mayhem included, because it keys off the game process, not the queue.
 
-## Build
+## Using it
 
-```bash
-cargo build --release
-```
-
-The binary is `target\release\league_auto_mute.exe` (single file, no runtime needed).
-
-## Run
-
-Double-click the exe, or from a terminal:
-
-```bash
-.\target\release\league_auto_mute.exe
-```
-
-Leave the console window open (minimised is fine). It logs what it is doing:
+Run `league_auto_mute.exe`. A console-style window shows what it is doing:
 
 ```
-[14:51:20] waiting for a League of Legends match...
-[15:02:11] game detected: mode=ARAM map=Howling Abyss time=3s
-[15:02:14] sent "/mute enemy"
-[15:02:14] done for this match; waiting for it to end
-[15:21:40] game ended
+[15:18:22] League Auto Mute started. Closing this window hides it to the tray.
+[15:18:22] mode: Mute Enemy  (/mute enemy)
+[15:18:22] waiting for a League of Legends match...
+[15:18:22] game detected: mode=KIWI map=Map12 time=4s
+[15:18:23] typing /mute enemy
+[15:18:23] sent /mute enemy
 ```
+
+- **Closing the window (X) hides it to the tray.** The app keeps running.
+- **Left-click the tray icon** to bring the window back.
+- **Right-click the tray icon** for the menu:
+  - `Mute Enemy` – sends `/mute enemy` each match (default)
+  - `Mute All` – sends `/mute all` each match
+  - `Show Console`
+  - `Exit` – actually quits
+
+Switching mode is saved to `config.toml` and takes effect immediately. If a match is
+already running, the new command is sent right away.
 
 Flags:
 
 | Flag | Meaning |
 |------|---------|
+| `--minimized` / `-m` | Start hidden in the tray (used by the startup shortcut). |
 | `--dry-run` / `-n` | Detect matches and log, but never send keystrokes. Good for a first test. |
 | `--config <path>` / `-c` | Use a different config file (default: `config.toml` next to the exe). |
 
+## Start automatically with Windows
+
+Right-click `install-startup.ps1` → **Run with PowerShell**, or from a terminal in the folder:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\install-startup.ps1
+```
+
+This adds a shortcut to your Startup folder that launches the app minimised to the tray at login.
+To remove it, delete `League Auto Mute.lnk` from `shell:startup`.
+
 ## Config
 
-On first run a `config.toml` is written next to the exe:
+`config.toml` is created next to the exe on first run:
 
 ```toml
-commands = ["/mute enemy"]          # typed in order, once per match
+mode = "enemy"                      # or "all"; also switchable from the tray
 poll_interval_ms = 2000
 min_game_time_secs = 5.0            # wait for the HUD to load
 window_title = "League of Legends (TM) Client"
 require_foreground = true           # only type while the game is focused
 key_delay_ms = 25
 chat_open_delay_ms = 200
-between_commands_ms = 400
 ```
-
-Want more? e.g. `commands = ["/mute enemy", "/mute all"]` — each is sent as its own chat line.
 
 If the game ever swallows the first keystrokes, raise `chat_open_delay_ms` to ~400.
 
-## Start automatically with Windows
-
-Run once from the project folder (PowerShell):
+## Build from source
 
 ```bash
-powershell -ExecutionPolicy Bypass -File .\install-startup.ps1
+cargo build --release
 ```
 
-This drops a shortcut into your Startup folder that launches the exe minimised at login.
-To remove it, delete `League Auto Mute.lnk` from `shell:startup`.
+The binary is `target\release\league_auto_mute.exe` (single file, no runtime needed).
 
 ## Caveats
 
@@ -84,4 +88,4 @@ To remove it, delete `League Auto Mute.lnk` from `shell:startup`.
 - Riot's rules on third-party tools restrict automation that gives a gameplay advantage.
   A one-shot chat command is about as benign as it gets, but it is still an external program
   sending input to the game. Use at your own discretion.
-- Windows only (uses `SendInput` and window-title checks from the Win32 API).
+- Windows only (Win32 tray icon, `SendInput`, window-title checks).
