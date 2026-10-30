@@ -356,8 +356,8 @@ pub fn init(start_hidden: bool) -> Result<(), String> {
     unsafe {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let hinst = GetModuleHandleW(null());
-        let icon = icon::create();
-        ICON.store(icon as isize, Ordering::Release);
+        let icon = icon::window();
+        ICON.store(icon::tray() as isize, Ordering::Release);
 
         let class_name = wide("LeagueAutoMuteWindow");
         let wc = WNDCLASSW {

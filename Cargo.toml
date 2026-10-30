@@ -23,6 +23,9 @@ windows-sys = { version = "0.59", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[build-dependencies]
+embed-resource = "3"
+
 [profile.release]
 opt-level = "s"
 lto = true

@@ -1,0 +1,2 @@
+// Icon resource #1: used for the tray icon, the window icon, and the exe's file icon.
+1 ICON "assets/icon.ico"
