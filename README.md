@@ -27,16 +27,18 @@ Run `league_auto_mute.exe`. A console-style window shows what it is doing:
 [15:18:23] sent /mute enemy
 ```
 
+- **Mode menu** (top of the window): `Mute Enemy` sends `/mute enemy` each match (default),
+  `Mute All` sends `/mute all`. The window title shows the current mode.
 - **Closing the window (X) hides it to the tray.** The app keeps running.
 - **Left-click the tray icon** to bring the window back.
-- **Right-click the tray icon** for the menu:
-  - `Mute Enemy` – sends `/mute enemy` each match (default)
-  - `Mute All` – sends `/mute all` each match
-  - `Show Console`
-  - `Exit` – actually quits
+- **Right-click the tray icon** for the same options plus `Show Console` and `Exit` (actually quits).
 
 Switching mode is saved to `config.toml` and takes effect immediately. If a match is
 already running, the new command is sent right away.
+
+> **Can't see the tray icon?** Windows 11 hides new tray icons behind the `^` arrow on the
+> taskbar. Click the arrow to find it, or drag it onto the taskbar to keep it visible
+> (Settings → Personalization → Taskbar → Other system tray icons).
 
 Flags:
 

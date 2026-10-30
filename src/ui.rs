@@ -21,16 +21,16 @@ use windows_sys::Win32::UI::Shell::{
     NOTIFYICONDATAW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, GetCursorPos, GetMessageW, GetWindowTextLengthW, LoadCursorW, MoveWindow,
-    PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW, SetForegroundWindow,
-    SetWindowPos, SetWindowTextW, ShowWindow, TrackPopupMenu, TranslateMessage,
-    CW_USEDEFAULT, ES_AUTOVSCROLL,
-    ES_MULTILINE, ES_READONLY, IDC_ARROW, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG,
+    AppendMenuW, CheckMenuRadioItem, CreateMenu, CreatePopupMenu, CreateWindowExW,
+    DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GetCursorPos, GetMenu,
+    GetMessageW, GetWindowTextLengthW, LoadCursorW, MoveWindow, PostMessageW, PostQuitMessage,
+    RegisterClassW, SendMessageW, SetForegroundWindow, SetMenu, SetWindowPos, SetWindowTextW,
+    ShowWindow, TrackPopupMenu, TranslateMessage, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE,
+    ES_READONLY, IDC_ARROW, MF_BYCOMMAND, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG,
     SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW, TPM_NONOTIFY, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, WM_APP, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_LBUTTONDBLCLK,
-    WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WM_SETFONT, WM_SIZE, WNDCLASSW, WS_CHILD,
-    WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
+    TPM_RIGHTBUTTON, WM_APP, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_DPICHANGED,
+    WM_LBUTTONDBLCLK, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WM_SETFONT, WM_SIZE, WNDCLASSW,
+    WS_CHILD, WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 
 const WM_TRAY: u32 = WM_APP + 1;
@@ -41,6 +41,7 @@ const ID_MODE_ENEMY: usize = 1;
 const ID_MODE_ALL: usize = 2;
 const ID_SHOW: usize = 3;
 const ID_EXIT: usize = 4;
+const ID_HIDE: usize = 5;
 
 const APP_TITLE: &str = "League Auto Mute";
 
@@ -147,7 +148,46 @@ unsafe fn tray_add(hwnd: HWND) {
     nid.uCallbackMessage = WM_TRAY;
     nid.hIcon = ICON.load(Ordering::Acquire) as _;
     set_tip(&mut nid, App::get().mode());
-    Shell_NotifyIconW(NIM_ADD, &nid);
+    if Shell_NotifyIconW(NIM_ADD, &nid) != 0 {
+        log("tray icon added (Windows 11 may hide it behind the ^ arrow on the taskbar)");
+    } else {
+        log("warning: could not add the tray icon; use the Mode menu in this window instead");
+    }
+}
+
+/// Menu bar: Mode > Mute Enemy / Mute All, App > Hide to Tray / Exit.
+unsafe fn build_menu_bar(hwnd: HWND) {
+    let bar = CreateMenu();
+    let mode_menu = CreatePopupMenu();
+    for mode in [Mode::Enemy, Mode::All] {
+        let id = if mode == Mode::Enemy { ID_MODE_ENEMY } else { ID_MODE_ALL };
+        let text = format!("{}\t{}", mode.label(), mode.command());
+        AppendMenuW(mode_menu, MF_STRING, id, wide(&text).as_ptr());
+    }
+    AppendMenuW(bar, MF_POPUP, mode_menu as usize, wide("Mode").as_ptr());
+
+    let app_menu = CreatePopupMenu();
+    AppendMenuW(app_menu, MF_STRING, ID_HIDE, wide("Hide to Tray").as_ptr());
+    AppendMenuW(app_menu, MF_SEPARATOR, 0, null());
+    AppendMenuW(app_menu, MF_STRING, ID_EXIT, wide("Exit").as_ptr());
+    AppendMenuW(bar, MF_POPUP, app_menu as usize, wide("App").as_ptr());
+
+    SetMenu(hwnd, bar);
+    refresh_mode_ui(hwnd);
+}
+
+/// Sync the menu-bar radio check and window title with the current mode.
+unsafe fn refresh_mode_ui(hwnd: HWND) {
+    let mode = App::get().mode();
+    let selected = if mode == Mode::Enemy { ID_MODE_ENEMY } else { ID_MODE_ALL };
+    CheckMenuRadioItem(
+        GetMenu(hwnd),
+        ID_MODE_ENEMY as u32,
+        ID_MODE_ALL as u32,
+        selected as u32,
+        MF_BYCOMMAND,
+    );
+    SetWindowTextW(hwnd, wide(&format!("{APP_TITLE} - {}", mode.label())).as_ptr());
 }
 
 unsafe fn tray_update_tip(hwnd: HWND) {
@@ -216,8 +256,12 @@ unsafe fn handle_command(hwnd: HWND, id: usize) {
                 Err(e) => log(format!("mode set to {} but saving config failed: {e}", mode.label())),
             }
             tray_update_tip(hwnd);
+            refresh_mode_ui(hwnd);
         }
         ID_SHOW => show_main(hwnd),
+        ID_HIDE => {
+            ShowWindow(hwnd, SW_HIDE);
+        }
         ID_EXIT => {
             DestroyWindow(hwnd);
         }
@@ -250,7 +294,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             EDIT_HWND.store(edit as isize, Ordering::Release);
             SendMessageW(edit, EM_SETLIMITTEXT, 0, 0);
             apply_font(GetDpiForWindow(hwnd));
+            build_menu_bar(hwnd);
             tray_add(hwnd);
+            0
+        }
+        WM_COMMAND => {
+            handle_command(hwnd, wparam & 0xFFFF);
             0
         }
         WM_SIZE => {
