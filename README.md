@@ -77,6 +77,17 @@ chat_open_delay_ms = 200
 
 If the game ever swallows the first keystrokes, raise `chat_open_delay_ms` to ~400.
 
+## Releases
+
+Pushing a tag like `v0.3.0` runs the GitHub Actions workflow in
+`.github/workflows/release.yml`: it builds on a Windows runner and publishes a GitHub
+Release with `LeagueAutoMute-<tag>.zip` (exe + README) and the bare exe attached.
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
 ## Build from source
 
 ```bash
