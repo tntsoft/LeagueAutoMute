@@ -46,6 +46,9 @@ impl Mode {
 pub struct Config {
     /// `enemy` or `all`. Also switchable from the tray menu.
     pub mode: Mode,
+    /// Register a per-user Run entry so the app starts (minimised) at login.
+    /// Applied on every launch; toggle from the App menu or the tray.
+    pub start_with_windows: bool,
     /// How often to poll the Live Client Data API when no game is running (ms).
     pub poll_interval_ms: u64,
     /// Do not type anything until the in-game clock has reached this many seconds.
@@ -65,6 +68,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             mode: Mode::Enemy,
+            start_with_windows: true,
             poll_interval_ms: 2000,
             min_game_time_secs: 5.0,
             window_title: "League of Legends (TM) Client".to_string(),

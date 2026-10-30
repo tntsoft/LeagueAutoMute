@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod autostart;
 mod config;
 mod game;
 mod icon;
@@ -66,6 +67,11 @@ fn main() {
         fatal(&format!("UI error: {e}"));
     }
     ui::log(format!("config: {}", app.config_path.display()));
+    match app.apply_start_with_windows() {
+        Ok(true) => ui::log("start with Windows: ON (App menu to turn off)"),
+        Ok(false) => ui::log("start with Windows: OFF (App menu to turn on)"),
+        Err(e) => ui::log(format!("could not apply start with Windows: {e}")),
+    }
 
     std::thread::spawn(move || worker::run(app));
 

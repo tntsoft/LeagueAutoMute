@@ -21,12 +21,13 @@ use windows_sys::Win32::UI::Shell::{
     NOTIFYICONDATAW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CheckMenuRadioItem, CreateMenu, CreatePopupMenu, CreateWindowExW,
+    AppendMenuW, CheckMenuItem, CheckMenuRadioItem, CreateMenu, CreatePopupMenu, CreateWindowExW,
     DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GetCursorPos, GetMenu,
     GetMessageW, GetWindowTextLengthW, LoadCursorW, MoveWindow, PostMessageW, PostQuitMessage,
     RegisterClassW, SendMessageW, SetForegroundWindow, SetMenu, SetWindowPos, SetWindowTextW,
     ShowWindow, TrackPopupMenu, TranslateMessage, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE,
-    ES_READONLY, IDC_ARROW, MF_BYCOMMAND, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG,
+    ES_READONLY, IDC_ARROW, MF_BYCOMMAND, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING,
+    MF_UNCHECKED, MSG,
     SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW, TPM_NONOTIFY, TPM_RETURNCMD,
     TPM_RIGHTBUTTON, WM_APP, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_DPICHANGED,
     WM_LBUTTONDBLCLK, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WM_SETFONT, WM_SIZE, WNDCLASSW,
@@ -42,6 +43,7 @@ const ID_MODE_ALL: usize = 2;
 const ID_SHOW: usize = 3;
 const ID_EXIT: usize = 4;
 const ID_HIDE: usize = 5;
+const ID_AUTOSTART: usize = 6;
 
 const APP_TITLE: &str = "League Auto Mute";
 
@@ -167,6 +169,7 @@ unsafe fn build_menu_bar(hwnd: HWND) {
     AppendMenuW(bar, MF_POPUP, mode_menu as usize, wide("Mode").as_ptr());
 
     let app_menu = CreatePopupMenu();
+    AppendMenuW(app_menu, MF_STRING, ID_AUTOSTART, wide("Start with Windows").as_ptr());
     AppendMenuW(app_menu, MF_STRING, ID_HIDE, wide("Hide to Tray").as_ptr());
     AppendMenuW(app_menu, MF_SEPARATOR, 0, null());
     AppendMenuW(app_menu, MF_STRING, ID_EXIT, wide("Exit").as_ptr());
@@ -188,6 +191,8 @@ unsafe fn refresh_mode_ui(hwnd: HWND) {
         MF_BYCOMMAND,
     );
     SetWindowTextW(hwnd, wide(&format!("{APP_TITLE} - {}", mode.label())).as_ptr());
+    let auto = if App::get().start_with_windows() { MF_CHECKED } else { MF_UNCHECKED };
+    CheckMenuItem(GetMenu(hwnd), ID_AUTOSTART as u32, MF_BYCOMMAND | auto);
 }
 
 unsafe fn tray_update_tip(hwnd: HWND) {
@@ -226,6 +231,8 @@ unsafe fn show_menu(hwnd: HWND) {
     );
     AppendMenuW(menu, MF_SEPARATOR, 0, null());
     AppendMenuW(menu, MF_STRING, ID_SHOW, wide("Show Console").as_ptr());
+    let auto = if App::get().start_with_windows() { MF_CHECKED } else { 0 };
+    AppendMenuW(menu, MF_STRING | auto, ID_AUTOSTART, wide("Start with Windows").as_ptr());
     AppendMenuW(menu, MF_SEPARATOR, 0, null());
     AppendMenuW(menu, MF_STRING, ID_EXIT, wide("Exit").as_ptr());
 
@@ -259,6 +266,15 @@ unsafe fn handle_command(hwnd: HWND, id: usize) {
             refresh_mode_ui(hwnd);
         }
         ID_SHOW => show_main(hwnd),
+        ID_AUTOSTART => {
+            let enable = !App::get().start_with_windows();
+            match App::get().set_start_with_windows(enable) {
+                Ok(()) if enable => log("start with Windows: ON (runs minimised to the tray at login)"),
+                Ok(()) => log("start with Windows: OFF"),
+                Err(e) => log(format!("could not change start with Windows: {e}")),
+            }
+            refresh_mode_ui(hwnd);
+        }
         ID_HIDE => {
             ShowWindow(hwnd, SW_HIDE);
         }

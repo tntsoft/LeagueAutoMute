@@ -31,7 +31,7 @@ Run `league_auto_mute.exe`. A console-style window shows what it is doing:
   `Mute All` sends `/mute all`. The window title shows the current mode.
 - **Closing the window (X) hides it to the tray.** The app keeps running.
 - **Left-click the tray icon** to bring the window back.
-- **Right-click the tray icon** for the same options plus `Show Console` and `Exit` (actually quits).
+- **Right-click the tray icon** for the same options plus `Show Console`.
 
 Switching mode is saved to `config.toml` and takes effect immediately. If a match is
 already running, the new command is sent right away.
@@ -50,14 +50,15 @@ Flags:
 
 ## Start automatically with Windows
 
-Right-click `install-startup.ps1` → **Run with PowerShell**, or from a terminal in the folder:
+On by default. The first time you run the app it registers itself in the per-user Startup
+list (`HKCU\...\CurrentVersion\Run`) so it launches minimised to the tray at login.
+No admin rights needed.
 
-```bash
-powershell -ExecutionPolicy Bypass -File .\install-startup.ps1
-```
+To turn it off or on: **App → Start with Windows** in the window, or the same entry in the
+tray menu. The choice is saved as `start_with_windows` in `config.toml`.
 
-This adds a shortcut to your Startup folder that launches the app minimised to the tray at login.
-To remove it, delete `League Auto Mute.lnk` from `shell:startup`.
+If you move the exe to another folder, just run it once from the new location and the
+Startup entry is updated automatically.
 
 ## Config
 
@@ -65,6 +66,7 @@ To remove it, delete `League Auto Mute.lnk` from `shell:startup`.
 
 ```toml
 mode = "enemy"                      # or "all"; also switchable from the tray
+start_with_windows = true           # register in the per-user Startup list
 poll_interval_ms = 2000
 min_game_time_secs = 5.0            # wait for the HUD to load
 window_title = "League of Legends (TM) Client"
